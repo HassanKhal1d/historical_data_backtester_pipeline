@@ -7,16 +7,22 @@ By persisting intermediate state via `.parquet` files at each stage, the archite
 
 ## Pipeline Architecture
 
-### Notebook 1: Data Loading & Preprocessing
-* **Status:** Complete.
-* **Work:** Cleans and standardizes the primary price panel.
-* **Output:** `data/processed/*.parquet` (serves as the root input for the entire pipeline).
+### Notebook 1 — 01_Data Loading and Preprocessing
 
-### Notebook 1b: OHLCV Acquisition
-* **Objective:** Closes the data gap required for intra-trade metrics.
-* **Work:** Pulls daily Open/High/Low/Close/Volume per ticker over the exact date range as Notebook 1. Runs identical data quality checks, including null handling, duplicate removal, and pre-IPO boundary filtering.
-* **Output:** `data/processed/ohlcv_{ticker}.parquet`.
-* **Watch-out:** Must align exactly to Notebook 1's trading calendar to prevent silent misalignment during MAE/MFE lookups later in the pipeline.
+**Objective:** Establish a high-fidelity, unified OHLCV data foundation for AAPL, META, MSFT, and TSLA, ensuring absolute alignment with actual market trading sessions from 2010 to 2025.
+
+**Work:**
+* **Synchronized Acquisition:** Automated pull of adjusted daily OHLCV data via `yfinance`, normalized to a common tz-naive index.
+* **Market Reality Integration:** Implementation of the NYSE trading calendar to distinguish between market closures (e.g., holidays, Hurricane Sandy) and actual data defects.
+* **Tiered Quality Control:** * **Masking Logic:** Distinguishes between fatal errors (e.g., >2 missing OHLCV points) and recoverable data.
+    * **Tiered Recovery:** Automated preservation of partial data via intelligent forward-filling for rows with valid core price information.
+* **Integrity Enforcement:** Formal handling of specific anomalies, such as the META pre-IPO window, alongside rigorous checks for duplicate index entries and look-ahead bias at every pipeline stage.
+* **Audit Trail:** Automated logging of data health, masked day counts, and adjustment methodologies.
+
+**Output:** * **Parquet Datasets:** `data/processed/ohlcv_{ticker}.parquet` containing the full OHLCV series, integrated validity masks (`is_valid_day`), and preserved time-series integrity.
+* **Metadata:** A persistent `metadata.json` audit file documenting the lifecycle and health metrics of the processed data.
+
+**Downstream Impact:** This unified, high-integrity dataset serves as the single source of truth for all subsequent analysis. Notebook 3 (Backtest Engine) consumes these Parquet files directly, allowing MAE/MFE and ATR calculations to operate on confirmed, observed market history—eliminating the need for secondary OHLC processing and preventing the performance degradation associated with Close-only legacy fallbacks.
 
 ### Notebook 2: Signal Construction (Section A)
 * **Input:** Notebook 1 cleaned Close panel.
